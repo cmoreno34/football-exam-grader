@@ -122,7 +122,7 @@ def grade_file(student_path: Path, recalc: bool = True) -> dict:
 
     sol_wb_d  = load_workbook(str(sol_path),  data_only=True)
     stu_wb_d  = load_workbook(str(calc_path), data_only=True)
-    stu_wb    = load_workbook(str(student_path))   # for writing scores
+    stu_wb    = load_workbook(str(calc_path))   # write scores onto recalculated copy
 
     results = {}   # section -> {q_label -> {score, max, detail}}
 
