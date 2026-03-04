@@ -92,14 +92,15 @@ if st.button("🚀 Grade all files", type="primary"):
     rows = []
     for fname, res in results_all.items():
         row = {"File": fname}
-        grand_score = grand_max = 0
+        grand_earned = grand_max_auto = grand_max_total = 0
         for sec, data in res["summary"].items():
-            pct = data['score'] / data['max'] * 100 if data['max'] else 0
-            row[sec] = f"{pct:.0f}%"
-            grand_score += data["score"]
-            grand_max   += data["max"]
-        total_pct = grand_score / grand_max * 100 if grand_max else 0
-        row["TOTAL %"] = f"{total_pct:.1f}%"
+            pct = data['score'] / data['max_auto'] * 100 if data['max_auto'] else 0
+            row[sec] = f"{pct:.0f}%  ({data['score']:.1f}/{data['max_auto']})"
+            grand_earned     += data["score"]
+            grand_max_auto   += data["max_auto"]
+            grand_max_total  += data["max_total"]
+        total_pct = grand_earned / grand_max_auto * 100 if grand_max_auto else 0
+        row["TOTAL %"] = f"{total_pct:.1f}%  ({grand_earned:.1f}/{grand_max_auto} auto)"
         rows.append(row)
 
     df = pd.DataFrame(rows)
@@ -112,8 +113,8 @@ if st.button("🚀 Grade all files", type="primary"):
     for fname, res in results_all.items():
         with st.expander(f"📄 {fname}"):
             for sec, data in res["summary"].items():
-                pct = data['score'] / data['max'] * 100 if data['max'] else 0
-                st.markdown(f"**{sec}** – {pct:.0f}% ({data['score']}/{data['max']} pts)")
+                pct = data['score'] / data['max_auto'] * 100 if data['max_auto'] else 0
+                st.markdown(f"**{sec}** – {pct:.0f}% ({data['score']:.1f}/{data['max_auto']} auto-graded pts | {data['max_total']} total pts)")
                 q_rows = []
                 for q, v in data["questions"].items():
                     status = "✅" if v["score"] else ("⚠️" if "MANUAL" in v["detail"] else "❌")
@@ -166,4 +167,5 @@ if st.button("🚀 Grade all files", type="primary"):
                         data=f.read(),
                         file_name=f"GRADED_{fname}",
                         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    )
                     )
