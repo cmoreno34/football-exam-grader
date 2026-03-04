@@ -94,11 +94,12 @@ if st.button("🚀 Grade all files", type="primary"):
         row = {"File": fname}
         grand_score = grand_max = 0
         for sec, data in res["summary"].items():
-            row[f"{sec} ({data['max']}pts)"] = f"{data['score']}/{data['max']}"
+            pct = data['score'] / data['max'] * 100 if data['max'] else 0
+            row[sec] = f"{pct:.0f}%"
             grand_score += data["score"]
             grand_max   += data["max"]
-        row["TOTAL"] = f"{grand_score}/{grand_max}"
-        row["% "] = f"{grand_score/grand_max*100:.1f}%"
+        total_pct = grand_score / grand_max * 100 if grand_max else 0
+        row["TOTAL %"] = f"{total_pct:.1f}%"
         rows.append(row)
 
     df = pd.DataFrame(rows)
@@ -111,7 +112,8 @@ if st.button("🚀 Grade all files", type="primary"):
     for fname, res in results_all.items():
         with st.expander(f"📄 {fname}"):
             for sec, data in res["summary"].items():
-                st.markdown(f"**{sec}** – {data['score']}/{data['max']} pts")
+                pct = data['score'] / data['max'] * 100 if data['max'] else 0
+                st.markdown(f"**{sec}** – {pct:.0f}% ({data['score']}/{data['max']} pts)")
                 q_rows = []
                 for q, v in data["questions"].items():
                     status = "✅" if v["score"] else ("⚠️" if "MANUAL" in v["detail"] else "❌")
@@ -141,7 +143,6 @@ if st.button("🚀 Grade all files", type="primary"):
                 type="primary",
             )
     else:
-        # zip all graded files
         zip_buf = io.BytesIO()
         with zipfile.ZipFile(zip_buf, "w") as zf:
             for fname, path in graded_files:
@@ -155,7 +156,6 @@ if st.button("🚀 Grade all files", type="primary"):
             type="primary",
         )
 
-    # also individual buttons
     if len(graded_files) > 1:
         cols = st.columns(min(4, len(graded_files)))
         for i, (fname, path) in enumerate(graded_files):
