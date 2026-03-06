@@ -29,6 +29,16 @@ RED_FONT    = Font(color="9C0006", bold=True)
 NUM_TOL = 0.02   # 2% relative tolerance
 
 
+_INVISIBLE = {'\u200b', '\u200c', '\u200d', '\ufeff', '\u00a0', '\u2060'}
+
+def _clean_str(v):
+    """Strip invisible unicode chars and collapse whitespace."""
+    s = str(v)
+    for ch in _INVISIBLE:
+        s = s.replace(ch, '')
+    return ' '.join(s.split()).strip().lower()
+
+
 def _eq_val(a, b):
     if a is None and b is None:
         return True
@@ -40,7 +50,7 @@ def _eq_val(a, b):
             return abs(fa) < 1e-6
         return abs(fa - fb) / abs(fb) <= NUM_TOL
     except (TypeError, ValueError):
-        return str(a).strip().lower() == str(b).strip().lower()
+        return _clean_str(a) == _clean_str(b)
 
 
 def _col_values(ws, col, row_start, row_end):
@@ -234,34 +244,41 @@ def grade_file(student_path: Path, recalc: bool = True) -> dict:
         # Q7 – manual
         S2["Q7"] = {"max":5, "rate":None, "detail":"⚠ MANUAL REVIEW – conditional formatting"}
 
-        # Q8 – FILTER+CHOOSECOLS: formula in B32, results spill B32:C39
-        # Compare set of (team_name, revenue) pairs
-        sv8 = _rect_values(s2_stu, 32, 39, 2, 3)
+        # Q8 – FILTER+CHOOSECOLS: solution spills B32:C39
+        # Students may place formula in col A — search cols A-C rows 32-42
+        sv8 = _rect_values(s2_stu, 32, 42, 1, 3)
         rv8 = _rect_values(s2_sol, 32, 39, 2, 3)
         r8  = _set_match_rate(sv8, rv8)
         S2["Q8"] = {"max":5, "rate":r8,
                     "detail":f"{'✔' if r8>=0.8 else '✘'} {int(r8*100)}% (FILTER+CHOOSECOLS, order-independent)"}
 
-        # Q9 – LET+FILTER: formula in E32, results spill E32:F35 (4 rows)
-        # Extend range to catch different-length results
-        sv9 = _rect_values(s2_stu, 32, 39, 5, 6)
+        # Q9 – LET+FILTER: solution spills E32:F35
+        # Students may place formula in col D — search cols D-F rows 32-42
+        sv9 = _rect_values(s2_stu, 32, 42, 4, 6)
         rv9 = _rect_values(s2_sol, 32, 35, 5, 6)
         r9  = _set_match_rate(sv9, rv9)
         S2["Q9"] = {"max":5, "rate":r9,
                     "detail":f"{'✔' if r9>=0.8 else '✘'} {int(r9*100)}% (LET+FILTER, order-independent)"}
 
-        # Q10 – VSTACK: formula in H32, results spill H32:I35 (4 rows)
-        sv10 = _rect_values(s2_stu, 32, 39, 8, 9)
+        # Q10 – VSTACK: solution spills H32:I35
+        # Students may place formula in col G — search cols G-I rows 32-42
+        sv10 = _rect_values(s2_stu, 32, 42, 7, 9)
         rv10 = _rect_values(s2_sol, 32, 35, 8, 9)
         r10  = _set_match_rate(sv10, rv10)
         S2["Q10"] = {"max":5, "rate":r10,
                      "detail":f"{'✔' if r10>=0.8 else '✘'} {int(r10*100)}% (VSTACK, order-independent)"}
 
-        # Q11-Q14 – multi-criteria, col E rows 47-50
+        # Q11-Q14 – answer may be in col E (5) or col F (6) depending on student layout
+        # e.g. student puts "Answer:" label in col E, value in col F
         for label, max_pts, row in [("Q11",2,47),("Q12",5,48),("Q13",5,49),("Q14",5,50)]:
-            sv_v = s2_stu.cell(row,5).value
-            rv_v = s2_sol.cell(row,5).value
-            r    = 1.0 if _eq_val(sv_v, rv_v) else 0.0
+            rv_v = s2_sol.cell(row, 5).value
+            sv_v = s2_stu.cell(row, 5).value
+            # if col E is a label/empty, try col F
+            if sv_v is None or (isinstance(sv_v, str) and not sv_v.replace('.','').replace('-','').strip().lstrip('-').replace('.','').isnumeric()):
+                alt = s2_stu.cell(row, 6).value
+                if alt is not None:
+                    sv_v = alt
+            r = 1.0 if _eq_val(sv_v, rv_v) else 0.0
             S2[label] = {"max":max_pts, "rate":r,
                          "detail":f"{'✔' if r else '✘'} Student={sv_v} | Expected={rv_v}"}
     else:
@@ -290,10 +307,26 @@ def grade_file(student_path: Path, recalc: bool = True) -> dict:
     if s3_stu:
         for label, max_pts, col in [
             ("Q1",1,7),("Q2",1,8),("Q3",2,9),("Q4",2,10),("Q5",2,11),
-            ("Q8",5,14),("Q9",5,15),("Q10",5,16)]:
+            ("Q8",5,14),("Q10",5,16)]:
             r = _match_rate(_col_values(s3_stu,col,17,26), _col_values(s3_sol,col,17,26))
             S3[label] = {"max":max_pts, "rate":r,
                          "detail":f"{'✔' if r>=0.8 else '✘'} {int(r*100)}% cells correct"}
+
+        # Q9 – LET+TEXTJOIN: compare ignoring extra spaces around parentheses
+        # e.g. "Lionel Martinez ( FW )" == "Lionel Martinez (FW)" after normalisation
+        def _norm_display(v):
+            if v is None:
+                return None
+            import re
+            s = _clean_str(v)                      # remove invisible chars, lower
+            s = re.sub(r'\s*\(\s*', '(', s)        # collapse spaces before/inside (
+            s = re.sub(r'\s*\)\s*', ')', s)        # collapse spaces around )
+            return s.strip()
+        sv9 = [_norm_display(v) for v in _col_values(s3_stu, 15, 17, 26)]
+        rv9 = [_norm_display(v) for v in _col_values(s3_sol, 15, 17, 26)]
+        r9  = sum(a == b for a, b in zip(sv9, rv9)) / len(rv9) if rv9 else 0.0
+        S3["Q9"] = {"max":5, "rate":r9,
+                    "detail":f"{'✔' if r9>=0.8 else '✘'} {int(r9*100)}% cells correct (whitespace-normalised)"}
 
         # Q6 – Age: DATEDIF(birthdate, TODAY(), "Y")
         # Compute expected ages directly from birth dates so we never depend on
@@ -374,8 +407,28 @@ def grade_file(student_path: Path, recalc: bool = True) -> dict:
     S4["Q1"] = {"max":1, "rate":rate_t, "detail":det_t}
 
     if s4_stu:
-        r = _match_rate(_rect_values(s4_stu,13,37,8,10), _rect_values(s4_sol,13,37,8,10))
-        S4["Q2"] = {"max":1, "rate":r, "detail":f"{'✔' if r>=0.8 else '✘'} {int(r*100)}%"}
+        # Q2 – GoalDiff + Result Home + Result Away
+        # Accept both text ("Win/Loss/Draw") and numeric (1/-1/0) representations
+        def _norm_result(v):
+            if v is None:
+                return None
+            try:
+                return {1: 'win', -1: 'loss', 0: 'draw'}[int(float(v))]
+            except (TypeError, ValueError, KeyError):
+                return str(v).strip().lower()
+
+        matched_q2 = total_q2 = 0
+        for row in range(13, 38):
+            for col in range(8, 11):
+                sv = s4_stu.cell(row, col).value
+                rv = s4_sol.cell(row, col).value
+                total_q2 += 1
+                if col == 8:
+                    matched_q2 += 1 if _eq_val(sv, rv) else 0
+                else:
+                    matched_q2 += 1 if _norm_result(sv) == _norm_result(rv) else 0
+        r = matched_q2 / total_q2 if total_q2 else 0.0
+        S4["Q2"] = {"max":1, "rate":r, "detail":f"{'✔' if r>=0.8 else '✘'} {int(r*100)}% cells correct"}
         S4["Q3"] = {"max":3, "rate":None, "detail":"⚠ MANUAL REVIEW – color scale CF"}
         S4["Q4"] = {"max":2, "rate":None, "detail":"⚠ MANUAL REVIEW – icon sets CF"}
         S4["Q5"] = {"max":3, "rate":None, "detail":"⚠ MANUAL REVIEW – slicer"}
