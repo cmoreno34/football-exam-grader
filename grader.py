@@ -105,8 +105,10 @@ def _set_match_rate(student_vals, sol_vals):
     return matched / len(flat_r)
 
 
-def _write_score(ws, row, col, rate, is_manual=False):
-    """Write 0.0–1.0 into a grading cell with colour coding."""
+REASON_FONT = Font(color="595959", italic=True, size=9)
+
+def _write_score(ws, row, col, rate, is_manual=False, reason=None, reason_col=None):
+    """Write 0.0–1.0 into a grading cell with colour coding and optional reason."""
     cell = ws.cell(row, col)
     if is_manual:
         cell.value = None
@@ -120,6 +122,12 @@ def _write_score(ws, row, col, rate, is_manual=False):
             cell.fill = YELLOW; cell.font = YELLOW_FONT
         else:
             cell.fill = RED;    cell.font = RED_FONT
+
+    # Write reason in the adjacent free column
+    if reason_col and reason:
+        rc = ws.cell(row, reason_col)
+        rc.value = reason
+        rc.font  = REASON_FONT
 
 
 def recalculate(path: Path) -> Path:
@@ -202,7 +210,8 @@ def grade_file(student_path: Path, recalc: bool = True) -> dict:
     results["Section 1"] = S1
     if s1_out:
         for i, q in enumerate(["Q0","Q1","Q2","Q3","Q4","Q5","Q6","Q7","Q8","Q9","Q10"]):
-            _write_score(s1_out, 3+i, 25, S1[q]["rate"])
+            _write_score(s1_out, 3+i, 25, S1[q]["rate"],
+                         reason=S1[q]["detail"], reason_col=27)
 
     # ════════════════════════════════════════════════════════════════════
     # SECTION 2  –  grading col O (15), rows 3–12
@@ -292,9 +301,11 @@ def grade_file(student_path: Path, recalc: bool = True) -> dict:
         for i, q in enumerate(["Q1","Q2","Q3","Q4","Q5","Q6","Q7","Q8","Q9","Q10"]):
             rate = S2[q]["rate"]
             _write_score(s2_out, 3+i, 15, rate if rate is not None else 0.0,
-                         is_manual=(rate is None))
+                         is_manual=(rate is None),
+                         reason=S2[q]["detail"], reason_col=17)
         for i, q in enumerate(["Q11","Q12","Q13","Q14"]):
-            _write_score(s2_out, 47+i, 10, S2[q]["rate"])
+            _write_score(s2_out, 47+i, 10, S2[q]["rate"],
+                         reason=S2[q]["detail"], reason_col=12)
 
     # ════════════════════════════════════════════════════════════════════
     # SECTION 3  –  grading col C (3), rows 31–40
@@ -393,7 +404,8 @@ def grade_file(student_path: Path, recalc: bool = True) -> dict:
     results["Section 3"] = S3
     if s3_out:
         for i, q in enumerate(["Q1","Q2","Q3","Q4","Q5","Q6","Q7","Q8","Q9","Q10"]):
-            _write_score(s3_out, 31+i, 3, S3[q]["rate"])
+            _write_score(s3_out, 31+i, 3, S3[q]["rate"],
+                         reason=S3[q]["detail"], reason_col=5)
 
     # ════════════════════════════════════════════════════════════════════
     # SECTION 4  –  grading col P (16), rows 14–21
@@ -448,7 +460,8 @@ def grade_file(student_path: Path, recalc: bool = True) -> dict:
         for i, q in enumerate(["Q1","Q2","Q3","Q4","Q5","Q6","Q7","Q8"]):
             rate = S4[q]["rate"]
             _write_score(s4_out, 14+i, 16, rate if rate is not None else 0.0,
-                         is_manual=(rate is None))
+                         is_manual=(rate is None),
+                         reason=S4[q]["detail"], reason_col=18)
 
     # ── save ─────────────────────────────────────────────────────────────
     out_path = student_path.parent / f"GRADED_{student_path.name}"
